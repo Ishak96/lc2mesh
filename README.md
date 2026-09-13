@@ -9,11 +9,11 @@
   </tr>
   <tr>
     <td align="center" valign="middle"><img src="assets/lightcurve_fit_ast6.png" height="220" alt="Asteroid 6 lightcurve fit"></td>
-    <td align="center" valign="middle"><video src="https://raw.githubusercontent.com/Ishak96/lc2mesh/main/assets/reconstruction_ast6.mp4" controls loop muted autoplay height="220"></video></td>
+    <td align="center" valign="middle"><img src="assets/reconstruction_ast6.gif" height="220" alt="Asteroid 6 reconstruction"></td>
   </tr>
   <tr>
     <td align="center" valign="middle"><img src="assets/lightcurve_fit_ast7.png" height="220" alt="Asteroid 7 lightcurve fit"></td>
-    <td align="center" valign="middle"><video src="https://raw.githubusercontent.com/Ishak96/lc2mesh/main/assets/reconstruction_ast7.mp4" controls loop muted autoplay height="220"></video></td>
+    <td align="center" valign="middle"><img src="assets/reconstruction_ast7.gif" height="220" alt="Asteroid 7 reconstruction"></td>
   </tr>
 </table>
 
