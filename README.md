@@ -2,6 +2,23 @@
 ## Technical University of Denmark Team Submission for Helsinki Asteroid Challenge 2026
 ### You can find the reconstructed asteroid STL files in [**recon/**](recon/), along with videos of the rotating meshes in [**videos/**](videos/).
 
+<table>
+  <tr>
+    <th align="center">Lightcurve fit (observed vs predicted)</th>
+    <th align="center">Reconstructed mesh</th>
+  </tr>
+  <tr>
+    <td align="center" valign="middle"><img src="assets/lightcurve_fit_ast6.png" height="220" alt="Asteroid 6 lightcurve fit"></td>
+    <td align="center" valign="middle"><video src="https://raw.githubusercontent.com/Ishak96/lc2mesh/main/assets/reconstruction_ast6.mp4" controls loop muted autoplay height="220"></video></td>
+  </tr>
+  <tr>
+    <td align="center" valign="middle"><img src="assets/lightcurve_fit_ast7.png" height="220" alt="Asteroid 7 lightcurve fit"></td>
+    <td align="center" valign="middle"><video src="https://raw.githubusercontent.com/Ishak96/lc2mesh/main/assets/reconstruction_ast7.mp4" controls loop muted autoplay height="220"></video></td>
+  </tr>
+</table>
+
+<sub>Asteroid 6 (top) and asteroid 7 (bottom), reconstructed from lightcurves only.</sub>
+
 `lc2mesh` reconstructs the 3D shape of an asteroid from its observed
 lightcurves. It fits **one implicit neural representation (INR) per asteroid**:
 a coordinate SIREN deforms an ellipsoid prior, a graph CNN then refines that
@@ -67,6 +84,7 @@ lc2mesh/
 ├── recon/                      # OUTPUT: reconstructed meshes, reconstructed_ast<ID>.stl
 ├── videos/                     # OUTPUT: rotating mp4 renders of the reconstructions
 ├── results/                    # OUTPUT: metrics.json, per-camera CSV and figures per asteroid
+├── assets/                     # figures and clips embedded in this README
 └── ckpt/                       # OUTPUT: PyTorch checkpoints (git-ignored, large)
 ```
 
