@@ -1,0 +1,20 @@
+# Challenge data (downloaded with ./bin/get_challenge_data.sh)
+challenge_data/
+challenge_data.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Training checkpoints (large binaries)
+ckpt/
+
+# recon/, videos/ and convex_inversions/ are tracked on purpose.
+
+# Tooling caches
+.ruff_cache/
+
+ckpt/
+results/

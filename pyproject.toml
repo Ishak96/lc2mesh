@@ -1,0 +1,39 @@
+[project]
+name = "lc2mesh"
+version = "0.1.0"
+description = "Asteroid mesh reconstruction from lightcurves with an implicit neural representation and a graph CNN refiner."
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    # Optimization and numerics
+    "torch>=2.5",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pandas>=2.0",
+    # Meshing, ray casting and the official voxel measures
+    "trimesh>=4.0",
+    "embreex>=2.17",            # Embree backend for trimesh.ray.ray_pyembree
+    "fast-simplification>=0.1.7",  # mesh decimation for video rendering
+    # Figures and videos
+    "matplotlib>=3.8",
+    "plotly>=5.20",
+    "imageio>=2.34",
+    "imageio-ffmpeg>=0.5",
+]
+
+[project.optional-dependencies]
+# Only needed to REGENERATE the convex-inversion priors (convinv/); the shipped
+# priors in convex_inversions/ make this optional. GPU acceleration is opt-in on
+# top of this: pip install cupy-cuda12x (or cupy-cuda13x), else NumPy is used.
+convinv = [
+    "pyvista>=0.44",
+    "numpy-stl>=3.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
