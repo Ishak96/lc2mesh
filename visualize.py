@@ -109,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
 
     torch.set_default_dtype(torch.float64)
     set_seed(VIEW_SEED)
-    device = setup_device(args.gpu)
+    device = setup_device(args.gpu, allow_cpu=True)
 
     recon_stl_file = Path(args.recon_dir) / f"reconstructed_ast{asteroid_id}.stl"
     if not recon_stl_file.exists():

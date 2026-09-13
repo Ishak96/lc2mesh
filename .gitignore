@@ -10,11 +10,9 @@ __pycache__/
 
 # Training checkpoints (large binaries)
 ckpt/
+results/
 
 # recon/, videos/ and convex_inversions/ are tracked on purpose.
 
 # Tooling caches
 .ruff_cache/
-
-ckpt/
-results/

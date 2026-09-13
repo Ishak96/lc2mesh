@@ -6,13 +6,24 @@ readme = "README.md"
 requires-python = ">=3.11"
 
 dependencies = [
-    # Optimization and numerics
-    "torch>=2.5",
+    # Optimization and numerics.
+    # torch is pinned to the exact version the reference results were produced
+    # with: the optimization is chaotic over 4000 steps, so a different torch
+    # build shifts the per-step loss by ~1e-6 and the final mesh visibly.
+    # Install the CUDA 12.6 build, which still ships sm_70 kernels (Tesla V100)
+    # and runs on drivers >= 525; the default PyPI wheel (cu13x) has no sm_70
+    # and needs driver >= 580, so it silently falls back to CPU on this cluster:
+    #   pip install --index-url https://download.pytorch.org/whl/cu126 torch==2.13.0
+    # `uv sync` picks that index automatically (see [tool.uv.sources] below).
+    "torch==2.13.0",
     "numpy>=1.26",
     "scipy>=1.11",
     "pandas>=2.0",
-    # Meshing, ray casting and the official voxel measures
-    "trimesh>=4.0",
+    "tqdm>=4.66",               # training progress bars
+    # Meshing, ray casting and the official voxel measures.
+    # trimesh is capped below 5: the 5.x embree ray backend returns a slightly
+    # different self-occlusion mask, which changes Stage-2 results.
+    "trimesh>=4.12,<5",
     "embreex>=2.17",            # Embree backend for trimesh.ray.ray_pyembree
     "fast-simplification>=0.1.7",  # mesh decimation for video rendering
     # Figures and videos
@@ -37,3 +48,12 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# `uv sync` resolves torch from the CUDA 12.6 index (sm_70 / V100 support).
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }

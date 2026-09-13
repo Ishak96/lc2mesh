@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 import torch
+from tqdm.auto import tqdm
 
 from lc2mesh.metrics import compute_pearson_r
 from lc2mesh.model import LightcurveToMesh, aggregate_neighbors
@@ -109,8 +110,8 @@ def train_stage(
     config: TrainingConfig,
     *,
     stage: int,
-    progress: Callable[[dict[str, float]], None] | None = None,
     containment_planes: tuple[torch.Tensor, torch.Tensor] | None = None,
+    show_progress: bool = True,
 ) -> StageResult:
     """Fit one asteroid; no true mesh or geometry metric enters optimization.
 
@@ -253,48 +254,65 @@ def train_stage(
             }
         if scheduler is not None and step:
             scheduler.step(float(score))
-        if progress is not None:
-            progress(row)
         net.train()
 
     evaluate(0)
-    for step in range(1, config.steps + 1):
-        optimizer.zero_grad(set_to_none=True)
-        vertices = current_vertices()
-        prediction = predict_lightcurves(vertices[0])
-        loss, mse, hull, laplacian, displacement, edge = objective(vertices, prediction)
-        if not torch.isfinite(loss):
-            raise FloatingPointError(f"Nonfinite loss at stage {stage}, step {step}")
-        loss.backward()
-        grad_norm = torch.nn.utils.clip_grad_norm_(
-            parameters, config.clip_grad_norm, error_if_nonfinite=True
-        )
-        optimizer.step()
-        with torch.no_grad():
-            correlations = compute_pearson_r(
-                observed[train_indices], prediction[train_indices]
+    bar = tqdm(
+        range(1, config.steps + 1),
+        desc=f"Stage {stage}",
+        unit="step",
+        dynamic_ncols=True,
+        disable=not show_progress,
+    )
+    with bar:
+        for step in bar:
+            optimizer.zero_grad(set_to_none=True)
+            vertices = current_vertices()
+            prediction = predict_lightcurves(vertices[0])
+            loss, mse, hull, laplacian, displacement, edge = objective(
+                vertices, prediction
             )
-        values = (
-            step,
-            loss,
-            mse,
-            hull,
-            laplacian,
-            displacement,
-            edge,
-            correlations.mean(),
-            correlations.min(),
-            grad_norm,
-            optimizer.param_groups[0]["lr"],
-        )
-        for key, value in zip(result.history, values):
-            result.history[key].append(
-                float(value.detach())
-                if isinstance(value, torch.Tensor)
-                else float(value)
+            if not torch.isfinite(loss):
+                raise FloatingPointError(f"Nonfinite loss at stage {stage}, step {step}")
+            loss.backward()
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                parameters, config.clip_grad_norm, error_if_nonfinite=True
             )
-        if step % config.eval_every == 0 or step == config.steps:
-            evaluate(step)
+            optimizer.step()
+            with torch.no_grad():
+                correlations = compute_pearson_r(
+                    observed[train_indices], prediction[train_indices]
+                )
+            values = (
+                step,
+                loss,
+                mse,
+                hull,
+                laplacian,
+                displacement,
+                edge,
+                correlations.mean(),
+                correlations.min(),
+                grad_norm,
+                optimizer.param_groups[0]["lr"],
+            )
+            for key, value in zip(result.history, values):
+                result.history[key].append(
+                    float(value.detach())
+                    if isinstance(value, torch.Tensor)
+                    else float(value)
+                )
+            if step % config.eval_every == 0 or step == config.steps:
+                evaluate(step)
+            if show_progress:
+                latest = result.evaluations[-1]
+                bar.set_postfix(
+                    loss=f"{result.history['loss'][-1]:.2e}",
+                    train=f"{latest['train_mse']:.2e}",
+                    val=f"{latest['validation_mse']:.2e}",
+                    best=f"{result.best_score:.2e}@{result.best_step}",
+                    refresh=False,
+                )
     if config.restore_best:
         net.load_state_dict(best_state)
     return result

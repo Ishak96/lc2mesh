@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import random
 from typing import Any
 
@@ -17,22 +18,53 @@ def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
 
 
-def setup_device(target_gpu_id: int = 5) -> torch.device:
-    """Select requested CUDA device when available, else CPU."""
-    if torch.cuda.is_available() and torch.cuda.device_count() > int(target_gpu_id):
-        device = torch.device(f"cuda:{int(target_gpu_id)}")
+def _cuda_failure_reason(gpu_id: int) -> str | None:
+    """Return why ``cuda:gpu_id`` cannot be used, or None if it is usable."""
+    if not torch.cuda.is_available():
+        # is_available() hides the cause (e.g. driver older than the wheel's CUDA
+        # runtime); allocating surfaces the real CUDA error.
+        try:
+            torch.zeros(1, device="cuda")
+        except Exception as exc:  # noqa: BLE001 - any CUDA init failure is reported verbatim
+            return str(exc).strip().splitlines()[0]
+        return "torch.cuda.is_available() returned False"
+
+    visible = torch.cuda.device_count()
+    if gpu_id >= visible:
+        return (
+            f"only {visible} CUDA device(s) visible "
+            f"(CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES', 'unset')})"
+        )
+    try:
+        torch.zeros(1, device=f"cuda:{gpu_id}")
+    except Exception as exc:  # noqa: BLE001
+        return str(exc).strip().splitlines()[0]
+    return None
+
+
+def setup_device(target_gpu_id: int, *, allow_cpu: bool = False) -> torch.device:
+    """Select the requested CUDA device, or fail loudly explaining why it is unusable."""
+    gpu_id = int(target_gpu_id)
+    if gpu_id < 0:
+        print("Device: cpu (requested explicitly)")
+        return torch.device("cpu")
+
+    reason = _cuda_failure_reason(gpu_id)
+    if reason is None:
+        device = torch.device(f"cuda:{gpu_id}")
         torch.cuda.set_device(device)
         print(f"Device: {device} ({torch.cuda.get_device_name(device)})")
         print(f"Visible CUDA devices: {torch.cuda.device_count()}")
         return device
 
-    device = torch.device("cpu")
-    print("Device: cpu")
-    if torch.cuda.is_available():
-        print(
-            f"Requested GPU id {target_gpu_id} is unavailable; visible GPU count is {torch.cuda.device_count()}."
-        )
-    return device
+    message = (
+        f"GPU {gpu_id} was requested but is unusable: {reason}. "
+        f"torch {torch.__version__} (CUDA build {torch.version.cuda})."
+    )
+    if not allow_cpu:
+        raise RuntimeError(f"{message} Pass --allow-cpu to run on CPU instead.")
+    print(f"WARNING: {message} Falling back to CPU (--allow-cpu).")
+    return torch.device("cpu")
 
 
 def build_unique_edges(faces: np.ndarray) -> np.ndarray:

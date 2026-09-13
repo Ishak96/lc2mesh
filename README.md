@@ -1,5 +1,6 @@
 # lc2mesh — asteroid shape reconstruction from lightcurves
-## Technical University of Denmark Team Submission
+## Technical University of Denmark Team Submission for Helsinki Asteroid Challenge 2026
+### You can find the reconstructed asteroid STL files in [**recon/**](recon/), along with videos of the rotating meshes in [**videos/**](videos/).
 
 `lc2mesh` reconstructs the 3D shape of an asteroid from its observed
 lightcurves. It fits **one implicit neural representation (INR) per asteroid**:
@@ -79,9 +80,20 @@ normally need to be run — see [Convex inversions](#convex-inversions).
 
 ## Requirements
 
-- **Python** >= 3.11 (developed on 3.13).
-- **PyTorch** >= 2.5. A CUDA build is strongly recommended; install the wheel
-  that matches your driver (see <https://pytorch.org/get-started/locally/>).
+- **[uv](https://docs.astral.sh/uv/)** — the recommended installer; it also
+  provides the interpreter, so Python does not have to be installed separately.
+  See [Installation](#installation).
+- **Python** >= 3.11 (reference environment: 3.13).
+- **PyTorch** 2.13.0, installed from the CUDA 12.6 index (see
+  [Installation](#installation)). The default PyPI wheel is a CUDA 13 build: it
+  requires driver >= 580 and ships no `sm_70` kernels, so on a Volta (V100)
+  cluster it cannot use the GPU at all. `cu126` still covers `sm_70` and runs on
+  drivers >= 525.
+  The version is **pinned on purpose**: the two-stage optimization runs for 4000
+  steps and is chaotic, so a different torch build (or a trimesh 5.x ray
+  backend) shifts each step by ~1e-6 and produces a visibly different final
+  mesh, even though the code is identical. See
+  [Reproducibility](#reproducibility).
   The code also runs on CPU, but a full run then takes hours instead of minutes.
 - **GPU**: one CUDA device. At the default resolution (`N_SUBDIVISIONS = 4`,
   5120 facets, 28 cameras, 842 phases) a run peaks at roughly 9 GiB of GPU
@@ -98,26 +110,63 @@ normally need to be run — see [Convex inversions](#convex-inversions).
 
 ## Installation
 
+[uv](https://docs.astral.sh/uv/) is the recommended way to install: the torch
+pin and its CUDA 12.6 index are declared in `pyproject.toml`
+(`[[tool.uv.index]]` / `[tool.uv.sources]`), so `uv sync` produces a working GPU
+environment in one command, with no manual wheel juggling.
+
+### 1. Install uv
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh     # Linux and macOS
+```
+
+Then restart the shell, or `source $HOME/.local/bin/env`. Alternatives:
+`pipx install uv`, `pip install uv`, `brew install uv`, or on Windows
+`powershell -c "irm https://astral.sh/uv/install.ps1 | iex"`. Check with
+`uv --version`.
+
+### 2. Create the environment
+
 ```bash
 git clone <repository-url> lc2mesh
 cd lc2mesh
-python -m venv .venv && source .venv/bin/activate
-pip install -e .
-```
-
-Or, with [uv](https://docs.astral.sh/uv/) (this creates `.venv/` for you, which
-is what `convinv/convexinitial.sh` picks up automatically):
-
-```bash
 uv sync                      # INR pipeline only
 uv sync --extra convinv      # + the convex-inversion regeneration dependencies
 ```
 
-If you need a specific CUDA build of PyTorch, install it first, then
-`pip install -e .`:
+`uv sync` creates `.venv/` (which `convinv/convexinitial.sh` and `run.sh` pick
+up automatically) and installs `torch==2.13.0+cu126`. Run anything with
+`uv run`, or activate the environment once:
 
 ```bash
-pip install torch --index-url https://download.pytorch.org/whl/cu128
+uv run python run.py --gpu 0 --asteroid 3
+# or
+source .venv/bin/activate
+```
+
+### 3. Check that the GPU is usable
+
+```bash
+uv run python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_arch_list())"
+```
+
+This must print `True` and an architecture list containing your GPU's compute
+capability (`sm_70` for a V100). `run.py` aborts with an explicit error if the
+requested `--gpu` cannot be used, instead of silently training on CPU; pass
+`--allow-cpu` to opt into the fallback, or `--gpu -1` to ask for CPU on purpose.
+
+### Alternative: plain pip
+
+pip does not read `[tool.uv.sources]`, so the CUDA 12.6 torch build has to be
+installed explicitly *before* the project — otherwise `pip install -e .` pulls
+the default CUDA 13 wheel from PyPI and the run falls back to CPU:
+
+```bash
+git clone <repository-url> lc2mesh
+cd lc2mesh
+python -m venv .venv && source .venv/bin/activate
+pip install --index-url https://download.pytorch.org/whl/cu126 torch==2.13.0
 pip install -e .
 ```
 
@@ -359,6 +408,20 @@ ones printed by `run.py`, which uses the training physics (`float32`,
 - Every checkpoint embeds the exact configuration used to produce it
   (`checkpoint["config"]`), including both `TrainingConfig` dataclasses and the
   camera split, so a run can always be traced back.
+
+**Reference environment.** The results were produced with Python 3.13,
+`torch 2.13.0+cu126`, `trimesh 4.12.2`, `numpy 2.5`, `scipy 1.18` on a Tesla
+V100. `pyproject.toml` pins `torch` and caps `trimesh < 5` for this reason:
+the pipeline is deterministic (fixed seeds, `use_deterministic_algorithms(True)`,
+`CUBLAS_WORKSPACE_CONFIG=:4096:8`) and reproduces bit-for-bit on the same stack,
+*including across GPU indices*, but it is **not** reproducible across library
+versions. Measured on a short run: torch 2.8 + trimesh 5.1 instead of the pinned
+versions changes the Stage-1 loss by ~1e-7 and the Stage-2 loss by ~1e-6 per
+step (trimesh 5's embree backend returns a slightly different self-occlusion
+mask). Over 2000 + 2000 steps those differences compound into a visibly
+different mesh. If your numbers do not match, check
+`python -c "import torch, trimesh; print(torch.__version__, trimesh.__version__)"`
+first.
 - Exact bit-for-bit reproducibility still depends on the GPU model, the CUDA
   version and the PyTorch build; the metrics are stable across runs on the same
   machine.
@@ -373,10 +436,25 @@ not by itself establish better geometry.
 **`Permission denied: ./run.sh`** — `chmod +x run.sh`, or run
 `bash run.sh <GPU_ID> <ASTEROID_ID>`.
 
-**`Device: cpu` although a GPU exists** — the requested index is out of range;
-`setup_device` prints the number of visible devices. Check `nvidia-smi` and pass
-a valid index. If you exported `CUDA_VISIBLE_DEVICES`, the indices are
-*remapped*: with `CUDA_VISIBLE_DEVICES=5`, the device to request is `0`.
+**`GPU <N> was requested but is unusable: ...`** — `run.py` refuses to fall back
+to CPU silently. The message carries the underlying CUDA error and the installed
+torch build. The common causes:
+
+- *`CUDA driver version is insufficient` / `torch.cuda.is_available() returned
+  False`* — the installed wheel is a CUDA 13 build but the driver is older
+  (`nvidia-smi` shows the driver's CUDA version). The environment was built with
+  pip instead of `uv sync`; re-run `uv sync`, or reinstall torch from the
+  `cu126` index as shown in [Installation](#installation).
+- *`no kernel image is available for execution`* — the wheel has no kernels for
+  the GPU's compute capability. Check
+  `python -c "import torch; print(torch.cuda.get_arch_list())"`; a V100 needs
+  `sm_70`, which only the `cu126` (and older) wheels provide.
+- *`only N CUDA device(s) visible`* — the index is out of range. Check
+  `nvidia-smi`. If you exported `CUDA_VISIBLE_DEVICES`, the indices are
+  *remapped*: with `CUDA_VISIBLE_DEVICES=5`, the device to request is `0`.
+
+Use `--allow-cpu` to keep the old fallback behaviour, or `--gpu -1` to select
+CPU deliberately.
 
 **`Error: ASTEROID_ID must be in 1-10`** — only the ten challenge asteroids
 exist. `run.py` rejects anything else via `--asteroid` choices.
@@ -404,13 +482,13 @@ write somewhere else.
 `CONVINV_REPO_ROOT=/absolute/path/to/lc2mesh` before submitting.
 
 **`ModuleNotFoundError: No module named 'lc2mesh'`** — the package is not
-installed in the active interpreter. Re-run `pip install -e .` inside the
-virtual environment you launch `run.sh` from, or set `PYTHONPATH=src`. Use
-`PYTHON=/path/to/python ./run.sh ...` to pick a specific interpreter.
+installed in the active interpreter. Re-run `uv sync` (or `pip install -e .`)
+inside the virtual environment you launch `run.sh` from, or set `PYTHONPATH=src`.
+Use `PYTHON=/path/to/python ./run.sh ...` to pick a specific interpreter.
 
 **`ModuleNotFoundError: No module named 'embreex'` / very slow Stage 2** — the
 Embree backend is missing, so `trimesh.ray.ray_pyembree` cannot be imported.
-`pip install embreex`.
+`uv sync` (or `pip install embreex`).
 
 **CUDA out of memory** — lower `N_SUBDIVISIONS` (4 -> 3 quarters the facet
 count) or `OCCLUSION_N_PHASES` in `src/lc2mesh/config.py`.

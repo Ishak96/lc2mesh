@@ -73,7 +73,6 @@ SELECTION_STAGE2 = "last"  # "last" -> keep final step | "training" -> best trai
 STAGE2_ACCEPTANCE = "mean"  # "mean" (avg of both) | "validation" (held-out) | "train"
 EVAL_EVERY = 25
 SCHEDULER_PATIENCE = 5
-PRINT_EVERY = 250
 
 # Evaluation-only settings.
 VOXEL_PITCH = 0.05  # official filled-voxel measure, pitch on cylinder-normalized meshes

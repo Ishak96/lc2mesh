@@ -78,7 +78,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--gpu",
         type=int,
         required=True,
-        help="CUDA device index to train on (falls back to CPU if unavailable).",
+        help="CUDA device index to train on (-1 for CPU). Fails if the GPU is unusable.",
+    )
+    parser.add_argument(
+        "--allow-cpu",
+        action="store_true",
+        help="Fall back to CPU instead of failing when the requested GPU is unusable.",
     )
     parser.add_argument(
         "--asteroid",
@@ -131,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     checkpoint_path = checkpoint_dir / f"inr_forward_train_{asteroid_id}.pth"
 
     set_seed(cfg.SEED)
-    device = setup_device(args.gpu)
+    device = setup_device(args.gpu, allow_cpu=args.allow_cpu)
     print(f"Training reference: {reference_mesh_label} -> {reference_stl_path}")
     print(
         "Validation is conditional on the external prior, not a clean end-to-end held-out test."
@@ -262,13 +267,6 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # ------------------------------------------------------------- Stage 1 ----
-    def report_progress(row):
-        if row["step"] == 0 or row["step"] % cfg.PRINT_EVERY == 0:
-            print(
-                f"step {row['step']:4d} | train MSE={row['train_mse']:.6f} | "
-                f"validation MSE={row['validation_mse']:.6f}"
-            )
-
     config1 = TrainingConfig(
         steps=cfg.STAGE1_STEPS,
         lr_inr=cfg.LR_INR_STAGE1,
@@ -291,7 +289,6 @@ def main(argv: list[str] | None = None) -> int:
         validation_indices,
         config1,
         stage=1,
-        progress=report_progress,
     )
     with torch.no_grad():
         verts_s1, _ = net(base_vertices, base_normals)
@@ -368,7 +365,6 @@ def main(argv: list[str] | None = None) -> int:
         validation_indices,
         config2,
         stage=2,
-        progress=report_progress,
         containment_planes=containment_planes,
     )
     best_evaluation = next(
