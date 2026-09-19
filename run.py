@@ -42,7 +42,7 @@ import trimesh  # noqa: E402
 from lc2mesh import config as cfg  # noqa: E402
 from lc2mesh.constants import ASTEROID_IDS, OBSERVERS  # noqa: E402
 from lc2mesh.data import get_model_folder, load_data  # noqa: E402
-from lc2mesh.eval import relative_volume_difference_voxelized  # noqa: E402
+from lc2mesh.eval import relative_volume_difference_voxelized, calculate_2d_metric  # noqa: E402
 from lc2mesh.forward_model import observers_to_unit_tensor  # noqa: E402
 from lc2mesh.mesh import normalize_mesh_to_challenge_cylinder  # noqa: E402
 from lc2mesh.metrics import (  # noqa: E402
@@ -105,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     asteroid_id = int(args.asteroid)
     output_root = Path(args.output_dir).resolve()
+    metric_2d_angles = [0, 45, 90, 135, 225, 270, 315]
 
     torch.set_default_dtype(torch.float32)
     torch.use_deterministic_algorithms(True)
@@ -602,6 +603,10 @@ def main(argv: list[str] | None = None) -> int:
             measure1, measure2 = relative_volume_difference_voxelized(
                 mesh, reference_mesh, pitch=cfg.VOXEL_PITCH
             )
+            metric_2d = 0.0
+            for theta in metric_2d_angles:
+                metric_2d += calculate_2d_metric(mesh, reference_mesh, theta=theta)
+            metric_2d /= len(metric_2d_angles)  # Average over all specified rotation angles
             chamfer = mesh_reconstruction_metrics(
                 mesh,
                 reference_mesh,
@@ -612,10 +617,12 @@ def main(argv: list[str] | None = None) -> int:
                 "measure1_one_minus_iou": measure1,
                 "measure2_symmetric_difference": measure2,
                 "surface_chamfer": chamfer,
+                "metric_2d": metric_2d,
             }
             print(
                 f"  {name:14s} measure1 (1 - IoU)={measure1:.4f} | "
-                f"measure2 (sym-diff/sum)={measure2:.4f} | surface Chamfer={chamfer:.4f}"
+                f"measure2 (sym-diff/sum)={measure2:.4f} | surface Chamfer={chamfer:.4f} | "
+                f"2D metric={metric_2d:.4f}"
             )
         if cfg.REFERENCE_MESH_SOURCE == "true":
             print(

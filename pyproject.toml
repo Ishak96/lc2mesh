@@ -31,6 +31,7 @@ dependencies = [
     "plotly>=5.20",
     "imageio>=2.34",
     "imageio-ffmpeg>=0.5",
+    "scikit-image>=0.26.0",
 ]
 
 [project.optional-dependencies]
